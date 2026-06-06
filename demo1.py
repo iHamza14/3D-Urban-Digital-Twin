@@ -19,16 +19,17 @@ import segmentation_models_pytorch as smp
 
 # ================= CONFIG =================
 NUM_CLASSES = 10
-CHECKPOINT_PATH = "segmentation/runs/best_model.pth"
+CHECKPOINT_PATH = "segmentation/runs/model.pth"
 INPUT_SIZE = (252, 252)
 
-RGB_DIR = "/run/media/wolverine/Windows/ML dataset/Offroad_Segmentation_testImages/test/rgb"
-SEG_DIR = "/run/media/wolverine/Windows/ML dataset/Offroad_Segmentation_testImages/test/seg"
+RGB_DIR = "/Users/hamza/Desktop/Arihant/Testing/rgb"
+SEG_DIR = "/Users/hamza/Desktop/Arihant/Testing/seg"
 
 VIDEO_OUTPUT_PATH_1 = "/Users/hamza/Desktop/Arihant/Testing/rgb/outputvideo1.mp4"
 VIDEO_OUTPUT_PATH_2 = "/Users/hamza/Desktop/Arihant/Testing/rgb/outputvideo2.mp4"
 VIDEO_FRAME_DELAY_MS = 30
-VIDEO_DISPLAY_SIZE = (420, 280)
+VIDEO_DISPLAY_SIZE = (1000, 700)
+
 
 
 # ================= COLOR MAP =================
@@ -70,9 +71,11 @@ class OffRoadDemoApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Offroad Semantic Scene Segmentation")
+        self.root.attributes("-fullscreen", True)
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = None
+        self.model = self.load_model()
+        
 
         self.transform = A.Compose([
             A.Resize(INPUT_SIZE[0], INPUT_SIZE[1]),
@@ -109,8 +112,71 @@ class OffRoadDemoApp:
         self.third_video_label = None
         self.third_video_visible = False
 
+        # 3D Viewer
+        self.current_view = "front"
+        self.viewer_images = []
+        self.viewer_index = 0
+        
+
         self.show_welcome()
         self.root.bind("1", lambda e: self.show_third_video_window())
+
+    def load_view(self, view_name):
+
+        self.current_view = view_name
+
+        folder = f"views/{view_name}"
+
+        self.viewer_images = sorted([
+            os.path.join(folder, f)
+            for f in os.listdir(folder)
+            if f.endswith(".png")
+        ])
+
+        self.viewer_index = 0
+
+        self.update_3d_view()
+
+    def load_3d_views(self):
+        self.load_view("front")
+
+    def update_3d_view(self):
+
+        if not self.viewer_images:
+            return
+
+        img = Image.open(
+            self.viewer_images[self.viewer_index]
+        )
+
+        img = img.resize((1400, 900))
+
+        photo = ImageTk.PhotoImage(img)
+
+        self.third_video_label.configure(image=photo)
+        self.third_video_label.image = photo
+
+        self.lbl_status.config(
+            text=f"3D Semantic Environment | View: {self.current_view.upper()}"
+        )
+
+    def next_view(self, event=None):
+
+        self.viewer_index += 1
+
+        if self.viewer_index >= len(self.viewer_images):
+            self.viewer_index = 0
+
+        self.update_3d_view()
+
+    def prev_view(self, event=None):
+
+        self.viewer_index -= 1
+
+        if self.viewer_index < 0:
+            self.viewer_index = len(self.viewer_images) - 1
+
+        self.update_3d_view()
 
     def terminal_write(self, text):
         self.terminal.insert(tk.END, text + "\n")
@@ -164,22 +230,26 @@ class OffRoadDemoApp:
         self.top_frame.pack(side=tk.TOP, fill=tk.X)
 
         self.btn_image = tk.Button(
-            self.top_frame,
-            text="SELECT IMAGE (O)",
-            command=self.on_select_image,
-            bg="#4CAF50",
-            fg="white",
-            padx=20
+        self.top_frame,
+        text="SELECT IMAGE",
+        command=self.on_select_image,
+        bg="#A9A9A9",
+        fg="white",
+        font=("Segoe UI", 14, "bold"),
+        width=18,
+        height=2
         )
         self.btn_image.pack(side=tk.LEFT, padx=10)
 
         self.btn_video = tk.Button(
-            self.top_frame,
-            text="SELECT VIDEO (V)",
-            command=self.on_select_video,
-            bg="#2196F3",
-            fg="white",
-            padx=20
+        self.top_frame,
+        text="SELECT VIDEO",
+        command=self.on_select_video,
+        bg="#A9A9A9",
+        fg="white",
+        font=("Segoe UI", 14, "bold"),
+        width=18,
+        height=2
         )
         self.btn_video.pack(side=tk.LEFT, padx=10)
 
@@ -234,13 +304,13 @@ class OffRoadDemoApp:
         self.fig.clear()
         self.fig.text(
             0.5, 0.5,
-            "DUALITY AI SYSTEM\n\nSelect Image or Video",
+            "Video Segmenter and 3D Digital Twin Constructor\n\nSelect Image or Video",
             ha='center', va='center', fontsize=18
         )
         self.canvas.draw()
 
     def start_terminal_listener(self):
-        print("Type 1 and press Enter to show Output Video 2 in a new window.")
+        # print("Type 1 and press Enter to show Output Video 2 in a new window.")
 
         def listen_for_signal():
             while True:
@@ -374,7 +444,7 @@ class OffRoadDemoApp:
                 cap.release()
             messagebox.showerror(
                 "Error",
-                "Could not open video:\n" + "\n".join(failed)
+                "Could not do:\n" + "\n".join(failed)
             )
             self.lbl_status.config(text="Video load failed")
             return
@@ -382,7 +452,7 @@ class OffRoadDemoApp:
         self.video_caps = caps
         self.video_labels = labels
         self.third_video_visible = False
-        self.lbl_status.config(text="Playing Video Loop... type 1 in terminal for Output 2")
+        self.lbl_status.config(text="")
         self.play_video_frame()
 
     def show_third_video_window(self):
@@ -396,7 +466,7 @@ class OffRoadDemoApp:
             return
 
         self.third_video_window = tk.Toplevel(self.root)
-        self.third_video_window.title("Output Video 2")
+        self.third_video_window.title("3D Model Viewer")
         self.third_video_window.configure(bg="#111111")
         self.third_video_window.protocol("WM_DELETE_WINDOW", self.hide_third_video_window)
 
@@ -405,18 +475,86 @@ class OffRoadDemoApp:
 
         title_label = tk.Label(
             frame,
-            text="Output Video 2",
+            text="3D Model",
             bg="#111111",
             fg="white",
             font=("Segoe UI", 11, "bold")
         )
         title_label.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        self.view_label = tk.Label(
+        frame,
+        text="View: FRONT",
+        bg="#111111",
+        fg="#00FFAA",
+        font=("Segoe UI", 10, "bold")
+        )
+
+        self.view_label.pack()
 
         self.third_video_label = tk.Label(frame, bg="black")
         self.third_video_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.load_3d_views()
+
+        self.third_video_window.bind(
+            "<Right>",
+            self.next_view
+        )
+
+        self.third_video_window.bind(
+            "<Left>",
+            self.prev_view
+        )
+
+        self.update_3d_view()
         self.video_labels[2] = self.third_video_label
         self.third_video_visible = True
-        self.lbl_status.config(text="Output Video 2 opened")
+        self.lbl_status.config(text="3D Model Viewer Opened")
+
+        controls = tk.Frame(self.third_video_window)
+        controls.pack(pady=10)
+
+        tk.Button(
+            controls,
+            text="Front",
+            width=10,
+            command=lambda: self.load_view("front")
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            controls,
+            text="Left",
+            width=10,
+            command=lambda: self.load_view("left")
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            controls,
+            text="Right",
+            width=10,
+            command=lambda: self.load_view("right")
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            controls,
+            text="Top",
+            width=10,
+            command=lambda: self.load_view("top")
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+        controls,
+        text="◀ Prev",
+        width=10,
+        command=self.prev_view
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Button(
+            controls,
+            text="Next ▶",
+            width=10,
+            command=self.next_view
+        ).pack(side=tk.LEFT, padx=5)
 
     def hide_third_video_window(self):
         self.third_video_visible = False
@@ -460,11 +598,11 @@ class OffRoadDemoApp:
         if len(self.video_caps) >= 3:
             third_frame = self.read_looped_frame(self.video_caps[2])
 
-        if self.third_video_visible and self.third_video_label is not None:
-            if third_frame is not None:
-                image = self.frame_to_photo(third_frame)
-                self.third_video_label.configure(image=image)
-                self.third_video_label.image = image
+        # if self.third_video_visible and self.third_video_label is not None:
+        #     if third_frame is not None:
+        #         image = self.frame_to_photo(third_frame)
+        #         self.third_video_label.configure(image=image)
+        #         self.third_video_label.image = image
 
         self.video_after_id = self.root.after(VIDEO_FRAME_DELAY_MS, self.play_video_frame)
 
@@ -521,7 +659,7 @@ class OffRoadDemoApp:
 
         lines = [
             "═══════════════════════════════════════════════",
-            " ORCA AUTONOMOUS DISASTER RESPONSE PLATFORM ",
+            " ORCA Segementer and 3D Digital Twin Constructor",
             "═══════════════════════════════════════════════",
             "",
             "[BOOT] Initializing mission environment...",
